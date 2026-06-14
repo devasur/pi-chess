@@ -96,6 +96,7 @@ export default function (pi: ExtensionAPI) {
 			movesFormatted,
 			"",
 			"Pick a move from the numbered list above. Copy the SAN exactly (e.g. chess_move with move=\"e4\"). ● = safe, ◐ = trade (attacked but defended), ○ = risky (piece may be lost). Captured piece shown in parens. Prefer safe moves; avoid ○ unless strategically sound.",
+			"IMPORTANT: Only use moves from the numbered list. If a move is not listed, it is illegal (e.g. Nf6 when a knight is already on f6). Never invent or guess a move.",
 			"Respond with ONLY your chess_move call — no text before or after it.",
 			actLine,
 		].join("\n");
