@@ -14,6 +14,7 @@ import {
 	RESET,
 } from "./constants.js";
 import type { GameSummary } from "./persistence.js";
+import { deleteGameFromDisk } from "./persistence.js";
 import { centerPad } from "./utils.js";
 
 /** Sentinel "square" to signal loading a saved game. */
@@ -22,9 +23,6 @@ export const LOAD_GAME_PREFIX = "__load__";
 export interface GameBrowserState {
 	games: GameSummary[];
 	cursor: number;
-	/** Set to the filepath of the game to load, or null if cancelled. */
-	selected: string | null;
-	deleted: boolean;
 }
 
 export class GameBrowserComponent implements Component {
@@ -46,8 +44,6 @@ export class GameBrowserComponent implements Component {
 		this.state = {
 			games,
 			cursor: 0,
-			selected: null,
-			deleted: false,
 		};
 	}
 
@@ -75,21 +71,16 @@ export class GameBrowserComponent implements Component {
 			this.version++;
 			this.tui.requestRender();
 		} else if ((data === "d" || data === "D") && this.state.games.length > 0) {
-			// Delete currently highlighted game
+			// Delete currently highlighted game from disk
+			const target = this.state.games[this.state.cursor];
+			deleteGameFromDisk(target.filepath);
 			this.state.games.splice(this.state.cursor, 1);
 			if (this.state.cursor >= this.state.games.length) {
 				this.state.cursor = Math.max(0, this.state.games.length - 1);
 			}
-			this.state.deleted = true;
 			this.version++;
 			this.tui.requestRender();
 		}
-	}
-
-	/** Get the list of filepaths that were deleted (for cleanup). */
-	getDeletedPaths(): string[] {
-		// We track deletions by comparing against original; caller handles this
-		return [];
 	}
 
 	invalidate(): void {

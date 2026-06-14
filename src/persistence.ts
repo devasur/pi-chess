@@ -176,6 +176,11 @@ export async function loadGameByPath(filepath: string): Promise<DiskSaveData | n
 	}
 }
 
+/** Delete a single saved game by filepath. */
+export async function deleteGameFromDisk(filepath: string): Promise<void> {
+	await unlink(filepath).catch(() => {});
+}
+
 /** Delete all saved games from disk (fresh start). */
 export async function deleteAllSaves(): Promise<void> {
 	const dir = getGamesDir();
