@@ -94,21 +94,21 @@ export function registerChessCommand(pi: ExtensionAPI): void {
 								done(undefined);
 							},
 							(from: Square, to: Square, promotion?: string) => {
-								handleUserMove(pi, ctx, restored.playerColor, from, to, promotion);
+								handleUserMove(pi, ctx, from, to, promotion);
 							},
 							restored,
 						);
 						setChessComponent(component);
+
+						// If it's the agent's turn, trigger the LLM to move.
+						// Must be inside ctx.ui.custom() — after the board is visible.
+						if (!restored.gameOver && restored.game.turn() !== restored.playerColor) {
+							setTimeout(() => triggerAgentTurn(pi), 100);
+						}
+
 						return component;
 					});
 
-					// If it's the agent's turn (e.g. player was Black and game just resumed),
-					// trigger the agent to move
-					if (restored.gameOver) {
-						// Game was already over — do nothing
-					} else if (restored.game.turn() !== restored.playerColor) {
-						setTimeout(() => triggerAgentTurn(pi), 100);
-					}
 					return;
 				}
 			}
@@ -142,33 +142,39 @@ async function startNewGame(
 				done(undefined);
 			},
 			(from: Square, to: Square, promotion?: string) => {
-				handleUserMove(pi, ctx, playerColor, from, to, promotion);
+				handleUserMove(pi, ctx, from, to, promotion);
 			},
 			initial,
 		);
 		setChessComponent(component);
+
+		// If the player is Black, the agent (White) moves first.
+		// Must be inside ctx.ui.custom() — after the board is visible.
+		if (playerColor === "b") {
+			setTimeout(() => triggerAgentTurn(pi), 100);
+		}
+
 		return component;
 	});
-
-	// If the player is Black, the agent (White) moves first.
-	if (playerColor === "b") {
-		setTimeout(() => triggerAgentTurn(pi), 100);
-	}
 }
 
 /**
  * Handle a move event from the `ChessComponent`. Sentinel squares are
  * used to signal non-move actions (restart, undo, new game).
+ *
+ * Reads `playerColor` from live `boardState` rather than a closure capture
+ * so that N (new game) and R (restart) color changes are respected.
  */
 function handleUserMove(
 	pi: ExtensionAPI,
 	ctx: ExtensionCommandContext,
-	playerColor: PlayerColor,
 	from: Square,
 	to: Square,
 	promotion?: string,
 ): void {
 	if (!boardState) return;
+
+	const playerColor = boardState.playerColor;
 
 	if (from === RESTART_SENTINEL) {
 		handleRestart(pi, playerColor);
