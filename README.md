@@ -19,8 +19,12 @@ pi install /path/to/pi-chess
 
 Start a game with the `/chess` command:
 
-- `/chess` — start a new game (you play **White**)
+- `/chess` — resume the last saved game, or start a new one (you play **White**)
 - `/chess black` — start a new game (you play **Black**)
+- `/chess new` — start a new game (you play **White**)
+- `/chess new black` — start a new game (you play **Black**)
+
+Games are automatically saved to disk after every move. When you run `/chess` without arguments, the extension loads the most recent saved game so you can pick up where you left off — even across different pi sessions.
 
 ### Controls
 
@@ -30,7 +34,8 @@ Start a game with the `/chess` command:
 | `Enter` / `Space` | Select piece / confirm destination / confirm promotion |
 | `Escape` | Deselect piece (or quit if no selection) |
 | `Q` | Quit the game |
-| `R` | Restart (when game is over) |
+| `R` | Restart with same color (when game is over) |
+| `N` | Start a new game (swaps color) |
 | `U` | Undo last move pair |
 
 ### How It Works
@@ -56,7 +61,8 @@ When it's the LLM's turn, the system prompt includes full chess instructions wit
 - 🎨 Color-coded board with Unicode chess pieces
 - ✨ Visual highlights: cursor, selected piece, legal moves, last move, check
 - 🔄 Undo support (`U` key undoes your move and the agent's response)
-- 💾 Game state persisted across session reloads
+- 💾 Auto-save to disk after every move — resume games across sessions
+- 🔄 New game shortcut (`N` key swaps color and starts fresh)
 - 🎯 Custom message renderers for move announcements and game-over
 - 🤖 Works with any model — the LLM receives clear instructions and a well-structured board representation
 - 📉 **Constant context cost** — context pruning keeps the LLM's context window small regardless of game length (see below)
@@ -88,19 +94,28 @@ With `terminate: true`, the tool result marks the turn as complete — the move,
 
 If the agent makes an illegal move, `terminate` is not set (the tool throws an error), so the agent gets the error message and can retry with a legal move.
 
+## Disk Persistence
+
+Games are automatically saved to `~/.pi/agent/extensions/pi-chess/.games/` after every move. Each save is a JSON file containing the FEN, player color, PGN, last move, and timestamp.
+
+- **Resume**: Running `/chess` without arguments loads the most recent save and lets you pick up where you left off — even across different pi sessions
+- **New game**: `N` key inside the board starts a new game (swaps color); `/chess new` or `/chess black` starts fresh from the command line
+- **Pruning**: Only the last 20 saves are kept; older ones are automatically deleted
+
 ## Architecture
 
 ```
 index.ts              — Extension entry point: session handlers, prompt injection, context pruning
 src/constants.ts      — ANSI codes, piece symbols, message types, sentinels
-src/types.ts          — BoardState, SaveData, BoardDetails, PlayerColor
+src/types.ts          — BoardState, SaveData, DiskSaveData, BoardDetails, PlayerColor
 src/utils.ts          — Coordinate conversion, isLightSquare, centerPad
 src/ascii-board.ts    — board → ASCII for the LLM
 src/state.ts          — boardState, gameActive, chessComponent, persistence helpers
+src/persistence.ts    — saveGameToDisk, loadLatestGame, deleteAllSaves
 src/turn.ts           — triggerAgentTurn, emitGameOverMessage, registerContextPruner
 src/messages.ts       — BoardMessageComponent, GameOverMessageComponent, renderers
 src/chess-component.ts — Interactive TUI board (keyboard input, rendering)
-src/command.ts        — /chess command registration
+src/command.ts        — /chess command registration (resume, new game)
 src/tools.ts          — chess_move and chess_get_board tool registration
 ```
 
@@ -110,5 +125,5 @@ Key design patterns:
 - **Custom Tools** (`chess_move`, `chess_get_board`) allow the LLM to play
 - **System Prompt Injection** (`before_agent_start`) provides chess instructions when a game is active
 - **Context Pruning** (`context` event) strips stale chess messages before each LLM call
-- **State Persistence** (`pi.appendEntry`) saves game state as FEN in the session
+- **State Persistence** — dual: session entries (`pi.appendEntry`) for in-session recovery + disk saves (`~/.pi/agent/extensions/pi-chess/.games/`) for cross-session resume
 - **Custom Message Renderers** display move announcements with board snapshots

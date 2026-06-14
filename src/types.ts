@@ -27,13 +27,19 @@ export interface BoardState {
 	gameResult: string;
 }
 
-// Persisted state (FEN + metadata)
+// Persisted state (FEN + metadata) — written to session entries
 export interface SaveData {
 	fen: string;
 	playerColor: PlayerColor;
 	lastMoveFrom: string | null;
 	lastMoveTo: string | null;
 	pgn: string;
+}
+
+// Disk save format — written to ~/.pi/agent/extensions/pi-chess/.games/
+export interface DiskSaveData extends SaveData {
+	/** ISO timestamp of the last move */
+	savedAt: string;
 }
 
 // Details sent to the LLM

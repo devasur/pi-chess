@@ -1,29 +1,32 @@
 /**
  * Chess extension — play chess against the current LLM model in the TUI.
  *
- * Usage: /chess          — start a new game (you play White)
+ * Usage: /chess          — resume last saved game, or start new (White)
  *        /chess black    — start a new game (you play Black)
+ *        /chess new      — start a new game (you play White)
  *
  * Controls:
  *   Arrow keys  — move cursor
  *   Enter        — select piece / confirm destination / choose promotion
  *   Escape       — deselect piece / quit (on empty selection)
  *   Q            — quit
- *   R            — restart (when game is over)
+ *   R            — restart with same color (when game is over)
+ *   N            — start a new game (swaps color)
  *   U            — undo last move pair
  *
- * The LLM plays via the `chess_move` tool using standard algebraic notation.
+ * Games are auto-saved to ~/.pi/agent/extensions/pi-chess/.games/
  *
  * File layout:
- *   src/constants.ts        — ANSI codes, piece symbols, message types
- *   src/types.ts            — BoardState, SaveData, BoardDetails, etc.
+ *   src/constants.ts        — ANSI codes, piece symbols, message types, sentinels
+ *   src/types.ts            — BoardState, SaveData, DiskSaveData, BoardDetails, etc.
  *   src/utils.ts            — coordinate helpers, text padding
  *   src/ascii-board.ts      — board → ASCII for the LLM
- *   src/state.ts            — boardState, gameActive, helpers, persistence
+ *   src/state.ts            — boardState, gameActive, helpers, save/disk persistence
+ *   src/persistence.ts      — saveGameToDisk, loadLatestGame, deleteAllSaves
  *   src/turn.ts             — turn-related side effects + context pruning
  *   src/messages.ts         — custom message components & renderer registration
  *   src/chess-component.ts  — interactive TUI board
- *   src/command.ts          — /chess command
+ *   src/command.ts          — /chess command (resume, new game)
  *   src/tools.ts            — chess_move and chess_get_board tools
  */
 

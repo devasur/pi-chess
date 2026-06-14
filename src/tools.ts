@@ -12,14 +12,13 @@ import { Type } from "typebox";
 import { Text } from "@earendil-works/pi-tui";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { boardToAscii } from "./ascii-board.js";
-import { SAVE_TYPE } from "./constants.js";
 import {
 	boardState,
 	chessComponent,
 	gameActive,
 	getBoardDetails,
 	getGameResult,
-	getSaveData,
+	saveGame,
 	setGameActive,
 } from "./state.js";
 import { BoardMessageComponent } from "./messages.js";
@@ -84,7 +83,7 @@ export function registerTools(pi: ExtensionAPI): void {
 					boardState.gameOver = true;
 					boardState.gameResult = getGameResult(game);
 					chessComponent?.updateState(boardState);
-					pi.appendEntry(SAVE_TYPE, getSaveData());
+					await saveGame(pi);
 					emitGameOverMessage(pi);
 					setGameActive(false);
 
@@ -101,7 +100,7 @@ export function registerTools(pi: ExtensionAPI): void {
 				}
 
 				chessComponent?.updateState(boardState);
-				pi.appendEntry(SAVE_TYPE, getSaveData());
+				await saveGame(pi);
 
 				const commentary = params.commentary
 					? ` ${params.commentary}.`

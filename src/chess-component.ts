@@ -33,6 +33,7 @@ import {
 	RESTART_SENTINEL,
 	SELECTED_BG,
 	UNDO_SENTINEL,
+	NEW_GAME_SENTINEL,
 	WHITE_PIECE_FG,
 } from "./constants.js";
 import type { BoardState } from "./types.js";
@@ -98,7 +99,15 @@ export class ChessComponent implements Component {
 		if (s.gameOver) {
 			if (data === "r" || data === "R") {
 				this.onUserMove(RESTART_SENTINEL, RESTART_SENTINEL);
+			} else if (data === "n" || data === "N") {
+				this.onUserMove(NEW_GAME_SENTINEL, NEW_GAME_SENTINEL);
 			}
+			return;
+		}
+
+		// New game
+		if (data === "n" || data === "N") {
+			this.onUserMove(NEW_GAME_SENTINEL, NEW_GAME_SENTINEL);
 			return;
 		}
 
@@ -274,15 +283,15 @@ export class ChessComponent implements Component {
 		const game = s.game;
 		let controls: string;
 		if (s.gameOver) {
-			controls = `${BOLD}R${RESET} restart  ${DIM}|${RESET}  ${BOLD}Q${RESET}/${BOLD}ESC${RESET} quit`;
+			controls = `${BOLD}R${RESET} restart  ${DIM}|${RESET}  ${BOLD}N${RESET} new game  ${DIM}|${RESET}  ${BOLD}Q${RESET}/${BOLD}ESC${RESET} quit`;
 		} else if (s.promotionFrom) {
 			controls = `${BOLD}↑↓${RESET} choose  ${DIM}|${RESET}  ${BOLD}ENTER${RESET} confirm  ${DIM}|${RESET}  ${BOLD}ESC${RESET} cancel`;
 		} else if (game.turn() !== s.playerColor) {
-			controls = `${DIM}Waiting for agent's move...${RESET}`;
+			controls = `${BOLD}N${RESET} new  ${DIM}|${RESET}  ${DIM}Waiting for agent's move...${RESET}`;
 		} else if (s.selectedSquare) {
-			controls = `${BOLD}↑↓←→${RESET} move  ${DIM}|${RESET}  ${BOLD}ENTER${RESET} confirm  ${DIM}|${RESET}  ${BOLD}ESC${RESET} deselect  ${DIM}|${RESET}  ${BOLD}U${RESET} undo`;
+			controls = `${BOLD}↑↓←→${RESET} move  ${DIM}|${RESET}  ${BOLD}ENTER${RESET} confirm  ${DIM}|${RESET}  ${BOLD}N${RESET} new  ${DIM}|${RESET}  ${BOLD}ESC${RESET} deselect  ${DIM}|${RESET}  ${BOLD}U${RESET} undo`;
 		} else {
-			controls = `${BOLD}↑↓←→${RESET} move  ${DIM}|${RESET}  ${BOLD}ENTER${RESET} select  ${DIM}|${RESET}  ${BOLD}Q${RESET}/${BOLD}ESC${RESET} quit  ${DIM}|${RESET}  ${BOLD}U${RESET} undo`;
+			controls = `${BOLD}↑↓←→${RESET} move  ${DIM}|${RESET}  ${BOLD}ENTER${RESET} select  ${DIM}|${RESET}  ${BOLD}N${RESET} new  ${DIM}|${RESET}  ${BOLD}Q${RESET}/${BOLD}ESC${RESET} quit  ${DIM}|${RESET}  ${BOLD}U${RESET} undo`;
 		}
 		return centerPad(controls, width);
 	}

@@ -6,8 +6,9 @@
 import { Chess, type Square } from "chess.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { SAVE_TYPE } from "./constants.js";
-import type { BoardDetails, BoardState, PlayerColor, SaveData } from "./types.js";
+import type { BoardDetails, BoardState, DiskSaveData, PlayerColor, SaveData } from "./types.js";
 import { boardToAscii } from "./ascii-board.js";
+import { saveGameToDisk } from "./persistence.js";
 
 /** The current game state. Mutated in place. */
 export let boardState: BoardState | null = null;
@@ -67,6 +68,27 @@ export function getSaveData(): SaveData {
 		lastMoveTo: boardState.lastMoveTo,
 		pgn: boardState.game.pgn(),
 	};
+}
+
+/**
+ * Save game state both to the session entry and to disk.
+ *
+ * Call this after every state change (moves, undo, restart) to ensure
+ * the game can be resumed even after quitting pi.
+ */
+export async function saveGame(pi: { appendEntry: (type: string, data: SaveData) => void }): Promise<void> {
+	if (!boardState) return;
+
+	// Session entry for reconstruction on reload within the same session
+	const data = getSaveData();
+	pi.appendEntry(SAVE_TYPE, data);
+
+	// Disk save for cross-session persistence
+	const diskData: DiskSaveData = {
+		...data,
+		savedAt: new Date().toISOString(),
+	};
+	await saveGameToDisk(diskData);
 }
 
 /** Build the LLM-facing details payload for the current position. */
@@ -133,6 +155,29 @@ export function reconstructState(ctx: ExtensionContext): void {
 		boardState = createInitialState();
 	}
 	gameActive = false;
+}
+
+/**
+ * Reconstruct board state from a DiskSaveData (loaded from disk).
+ * Used when resuming a game from disk on /chess startup.
+ */
+export function reconstructFromDiskData(data: DiskSaveData): BoardState {
+	const game = new Chess(data.fen);
+	return {
+		game,
+		playerColor: data.playerColor as PlayerColor,
+		cursorRow: data.playerColor === "w" ? 6 : 1,
+		cursorCol: 4,
+		selectedSquare: null,
+		legalMoves: [],
+		promotionFrom: null,
+		promotionTo: null,
+		promotionIndex: 0,
+		lastMoveFrom: data.lastMoveFrom as Square | null,
+		lastMoveTo: data.lastMoveTo as Square | null,
+		gameOver: game.isGameOver(),
+		gameResult: game.isGameOver() ? getGameResult(game) : "",
+	};
 }
 
 /** Build a human-readable result string for a finished game. */

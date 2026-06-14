@@ -59,3 +59,7 @@ export const GAME_OVER_MESSAGE_TYPE = "chess-game-over";
 // Special "squares" used as sentinel values for non-move actions
 export const RESTART_SENTINEL = "__restart__" as unknown as Square;
 export const UNDO_SENTINEL = "__undo__" as unknown as Square;
+export const NEW_GAME_SENTINEL = "__newgame__" as unknown as Square;
+
+// Disk persistence directory (relative to agent dir)
+export const GAMES_DIR_NAME = ".games";
