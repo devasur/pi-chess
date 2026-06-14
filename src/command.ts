@@ -7,6 +7,7 @@
  * fresh game as White.
  *
  * Keyboard shortcuts during play:
+ *   G — browse saved games
  *   N — start a new game (prompts for color)
  *   R — restart after game over (same color)
  *   U — undo last move pair
@@ -50,6 +51,9 @@ import {
 } from "./turn.js";
 import type { PlayerColor } from "./types.js";
 
+/** Return value from the board's done() callback — signals next action. */
+type BoardExitAction = "games" | undefined;
+
 export function registerChessCommand(pi: ExtensionAPI): void {
 	pi.registerCommand("chess", {
 		description: "Play chess against the agent ('black', 'new', 'games' to browse saves)",
@@ -62,16 +66,11 @@ export function registerChessCommand(pi: ExtensionAPI): void {
 
 			const raw = args?.trim().toLowerCase() ?? "";
 
-			// Browse saved games
+			// Browse saved games (from command line)
 			if (raw === "games" || raw === "history") {
-				const selected = await openGameBrowser(pi, ctx);
+				const selected = await runGameBrowser(pi, ctx);
 				if (selected) {
-					const data = await loadGameByPath(selected);
-					if (data) {
-						await resumeSavedGame(pi, ctx, data);
-					} else {
-						ctx.ui.notify("Could not load selected game", "error");
-					}
+					await openBoardWithGame(pi, ctx, selected);
 				}
 				return;
 			}
@@ -79,7 +78,7 @@ export function registerChessCommand(pi: ExtensionAPI): void {
 			// Explicit new game requested
 			if (raw === "new" || raw === "new white" || raw === "new black") {
 				const playerColor: PlayerColor = raw.endsWith("black") ? "b" : "w";
-				await startNewGame(pi, ctx, playerColor);
+				await runBoardLoop(pi, ctx, createInitialState(playerColor));
 				return;
 			}
 
@@ -90,67 +89,86 @@ export function registerChessCommand(pi: ExtensionAPI): void {
 			if (!args?.trim()) {
 				const saved = await loadLatestGame();
 				if (saved) {
-					// Resume saved game
 					const restored = reconstructFromDiskData(saved);
-					setBoardState(restored);
-					setGameActive(!restored.gameOver);
-					activateChessTools(pi);
-					pi.setSessionName(`Chess — ${restored.playerColor === "w" ? "White" : "Black"} (resumed)`);
-
-					if (restored.gameOver) {
-						setGameActive(false);
-						deactivateChessTools(pi);
-					}
-
-					await ctx.ui.custom<void>((tui, _theme, _kb, done) => {
-						const component = new ChessComponent(
-							tui,
-							() => {
-								setChessComponent(null);
-								setGameActive(false);
-								deactivateChessTools(pi);
-								done(undefined);
-							},
-							(from: Square, to: Square, promotion?: string) => {
-								handleUserMove(pi, ctx, from, to, promotion);
-							},
-							restored,
-						);
-						setChessComponent(component);
-
-						// If it's the agent's turn, trigger the LLM to move.
-						// Must be inside ctx.ui.custom() — after the board is visible.
-						if (!restored.gameOver && restored.game.turn() !== restored.playerColor) {
-							setTimeout(() => triggerAgentTurn(pi), 100);
-						}
-
-						return component;
-					});
-
+					await runBoardLoop(pi, ctx, restored);
 					return;
 				}
 			}
 
 			// No saved game found, or user specified a color — start fresh
-			await startNewGame(pi, ctx, playerColor);
+			await runBoardLoop(pi, ctx, createInitialState(playerColor));
 		},
 	});
 }
 
-/** Start a brand new game. */
-async function startNewGame(
+// ---------------------------------------------------------------------------
+// Board loop — the board's done() returns a BoardExitAction that drives
+// what happens next (reopen board, open game browser, or exit).
+// ---------------------------------------------------------------------------
+
+/**
+ * Run the main board loop. Opens the chess board; when it closes, checks
+ * the exit action and either opens the game browser or exits.
+ * If the game browser returns a selected file, loads it and re-enters
+ * the board loop. If the browser is cancelled, reopens the current game.
+ */
+async function runBoardLoop(
 	pi: ExtensionAPI,
 	ctx: ExtensionCommandContext,
-	playerColor: PlayerColor,
+	initialState: import("./types.js").BoardState,
 ): Promise<void> {
-	const initial = createInitialState(playerColor);
-	setBoardState(initial);
-	setGameActive(true);
-	activateChessTools(pi);
-	pi.setSessionName(`Chess — ${playerColor === "w" ? "White" : "Black"}`);
+	let state = initialState;
+
+	while (true) {
+		const exitAction = await openBoard(pi, ctx, state);
+
+		if (exitAction === "games") {
+			// Save current state before opening browser
+			await saveGame(pi);
+			const selected = await runGameBrowser(pi, ctx);
+			if (selected) {
+				// Load selected game and re-enter loop
+				const data = await loadGameByPath(selected);
+				if (data) {
+					state = reconstructFromDiskData(data);
+					continue; // reopen board with new game
+				} else {
+					ctx.ui.notify("Could not load selected game", "error");
+					// Fall through to reopen current game
+				}
+			}
+			// Browser cancelled — reopen current game
+			if (boardState) {
+				state = boardState;
+			}
+			continue;
+		}
+
+		// Normal exit (undefined) — done
+		break;
+	}
+}
+
+/**
+ * Open the chess board as a ctx.ui.custom() and return the exit action.
+ * This is the ONLY place that calls ctx.ui.custom() for the board.
+ */
+async function openBoard(
+	pi: ExtensionAPI,
+	ctx: ExtensionCommandContext,
+	state: import("./types.js").BoardState,
+): Promise<BoardExitAction> {
+	setBoardState(state);
+	setGameActive(!state.gameOver);
+	if (!state.gameOver) {
+		activateChessTools(pi);
+	} else {
+		deactivateChessTools(pi);
+	}
+	pi.setSessionName(`Chess — ${state.playerColor === "w" ? "White" : "Black"}`);
 	await saveGame(pi);
 
-	await ctx.ui.custom<void>((tui, _theme, _kb, done) => {
+	return ctx.ui.custom<BoardExitAction>((tui, _theme, _kb, done) => {
 		const component = new ChessComponent(
 			tui,
 			() => {
@@ -160,15 +178,22 @@ async function startNewGame(
 				done(undefined);
 			},
 			(from: Square, to: Square, promotion?: string) => {
-				handleUserMove(pi, ctx, from, to, promotion);
+				const action = handleUserMove(pi, ctx, from, to, promotion);
+				if (action) {
+					// Close the board with a next-action signal
+					setChessComponent(null);
+					setGameActive(false);
+					deactivateChessTools(pi);
+					done(action);
+				}
 			},
-			initial,
+			state,
 		);
 		setChessComponent(component);
 
-		// If the player is Black, the agent (White) moves first.
+		// If it's the agent's turn, trigger the LLM to move.
 		// Must be inside ctx.ui.custom() — after the board is visible.
-		if (playerColor === "b") {
+		if (!state.gameOver && state.game.turn() !== state.playerColor) {
 			setTimeout(() => triggerAgentTurn(pi), 100);
 		}
 
@@ -177,8 +202,59 @@ async function startNewGame(
 }
 
 /**
+ * Open the game browser, return the filepath of the selected game,
+ * or null if cancelled.
+ */
+async function runGameBrowser(
+	_pi: ExtensionAPI,
+	ctx: ExtensionCommandContext,
+): Promise<string | null> {
+	const games = await listSavedGames();
+	if (games.length === 0) {
+		ctx.ui.notify("No saved games found", "info");
+		return null;
+	}
+
+	return ctx.ui.custom<string | null>((tui, _theme, _kb, done) => {
+		const component = new GameBrowserComponent(
+			tui,
+			(selected) => done(selected),
+			games,
+		);
+		return component;
+	});
+}
+
+/**
+ * Load a game from disk and open the board loop with it.
+ * Used when /chess games selects a game.
+ */
+async function openBoardWithGame(
+	pi: ExtensionAPI,
+	ctx: ExtensionCommandContext,
+	filepath: string,
+): Promise<void> {
+	const data = await loadGameByPath(filepath);
+	if (!data) {
+		ctx.ui.notify("Could not load selected game", "error");
+		return;
+	}
+	const state = reconstructFromDiskData(data);
+	await runBoardLoop(pi, ctx, state);
+}
+
+// ---------------------------------------------------------------------------
+// Move handlers — called from the ChessComponent's onUserMove callback.
+// Return a BoardExitAction if the board should close, or undefined to
+// keep it open.
+// ---------------------------------------------------------------------------
+
+/**
  * Handle a move event from the `ChessComponent`. Sentinel squares are
- * used to signal non-move actions (restart, undo, new game).
+ * used to signal non-move actions (restart, undo, new game, games browser).
+ *
+ * Returns a BoardExitAction if the board should close (e.g. "games"),
+ * or undefined to keep it open.
  *
  * Reads `playerColor` from live `boardState` rather than a closure capture
  * so that N (new game) and R (restart) color changes are respected.
@@ -189,32 +265,33 @@ function handleUserMove(
 	from: Square,
 	to: Square,
 	promotion?: string,
-): void {
-	if (!boardState) return;
+): BoardExitAction {
+	if (!boardState) return undefined;
 
 	const playerColor = boardState.playerColor;
 
 	if (from === RESTART_SENTINEL) {
 		handleRestart(pi, playerColor);
-		return;
+		return undefined;
 	}
 
 	if (from === UNDO_SENTINEL) {
 		handleUndo(pi);
-		return;
+		return undefined;
 	}
 
 	if (from === NEW_GAME_SENTINEL) {
 		handleNewGame(pi, ctx, playerColor);
-		return;
+		return undefined;
 	}
 
 	if (from === GAMES_SENTINEL) {
-		handleGamesBrowser(pi, ctx);
-		return;
+		// Signal the board to close so the game browser can open
+		return "games";
 	}
 
 	handleRegularMove(pi, ctx, from, to, promotion);
+	return undefined;
 }
 
 /** Reset the game to the initial position and persist. */
@@ -317,85 +394,4 @@ async function handleRegularMove(
 		// guard anyway in case the chess.js API rejects a move.
 		ctx.ui.notify(`Illegal move: ${msg}`, "error");
 	}
-}
-/** Open the saved-games browser from inside the board (G key). */
-function handleGamesBrowser(
-	pi: ExtensionAPI,
-	ctx: ExtensionCommandContext,
-): void {
-	openGameBrowser(pi, ctx).then((selected) => {
-		if (!selected) return;
-
-		loadGameByPath(selected).then((data) => {
-			if (!data) {
-				ctx.ui.notify("Could not load selected game", "error");
-				return;
-			}
-			resumeSavedGame(pi, ctx, data);
-		});
-	});
-}
-
-/** Open the game browser and return the filepath of the selected game. */
-async function openGameBrowser(
-	_pi: ExtensionAPI,
-	ctx: ExtensionCommandContext,
-): Promise<string | null> {
-	const games = await listSavedGames();
-	if (games.length === 0) {
-		ctx.ui.notify("No saved games found", "info");
-		return null;
-	}
-
-	return ctx.ui.custom<string | null>((tui, _theme, _kb, done) => {
-		const component = new GameBrowserComponent(
-			tui,
-			(selected) => done(selected),
-			games,
-		);
-		return component;
-	});
-}
-
-/** Resume a saved game from disk data (used by /chess games and G key). */
-async function resumeSavedGame(
-	pi: ExtensionAPI,
-	ctx: ExtensionCommandContext,
-	data: import("./types.js").DiskSaveData,
-): Promise<void> {
-	const restored = reconstructFromDiskData(data);
-	setBoardState(restored);
-	setGameActive(!restored.gameOver);
-	activateChessTools(pi);
-	pi.setSessionName(`Chess — ${restored.playerColor === "w" ? "White" : "Black"} (resumed)`);
-
-	if (restored.gameOver) {
-		setGameActive(false);
-		deactivateChessTools(pi);
-	}
-
-	await saveGame(pi);
-
-	await ctx.ui.custom<void>((tui, _theme, _kb, done) => {
-		const component = new ChessComponent(
-			tui,
-			() => {
-				setChessComponent(null);
-				setGameActive(false);
-				deactivateChessTools(pi);
-				done(undefined);
-			},
-			(from: Square, to: Square, promotion?: string) => {
-				handleUserMove(pi, ctx, from, to, promotion);
-			},
-			restored,
-		);
-		setChessComponent(component);
-
-		if (!restored.gameOver && restored.game.turn() !== restored.playerColor) {
-			setTimeout(() => triggerAgentTurn(pi), 100);
-		}
-
-		return component;
-	});
 }
