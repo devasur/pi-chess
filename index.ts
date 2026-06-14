@@ -23,6 +23,7 @@
  *   src/ascii-board.ts      — board → ASCII for the LLM
  *   src/state.ts            — boardState, gameActive, helpers, save/disk persistence
  *   src/persistence.ts      — saveGameToDisk, loadLatestGame, deleteAllSaves
+ *   src/move-annotations.ts  — annotate legal moves with threat/safety indicators
  *   src/turn.ts             — turn-related side effects + context pruning
  *   src/messages.ts         — custom message components & renderer registration
  *   src/chess-component.ts  — interactive TUI board
@@ -38,6 +39,7 @@ import { registerTools } from "./src/tools.js";
 import { registerContextPruner } from "./src/turn.js";
 import { boardState, gameActive } from "./src/state.js";
 import { boardToAscii } from "./src/ascii-board.js";
+import { annotateMoves, formatAnnotatedMoves } from "./src/move-annotations.js";
 
 export default function (pi: ExtensionAPI) {
 	// -------------------------------------------------------------------
@@ -71,8 +73,8 @@ export default function (pi: ExtensionAPI) {
 		const playerColor = boardState.playerColor === "w" ? "White" : "Black";
 
 		const boardAscii = boardToAscii(game);
-		const moves = game.moves();
-		const movesStr = moves.length > 0 ? moves.join(", ") : "(none)";
+		const annotations = annotateMoves(game);
+		const movesFormatted = formatAnnotatedMoves(annotations);
 
 		const checkLine = game.isCheck()
 			? "You are in check! You must get out of check.\n"
@@ -90,9 +92,9 @@ export default function (pi: ExtensionAPI) {
 			"```",
 			`FEN: ${game.fen()}`,
 			checkLine + `Turn: ${turnLine}`,
-			`Legal moves: ${movesStr}`,
+			movesFormatted,
 			"",
-			"Call chess_move with your move in SAN (e4, Nf3, Bxb5, O-O, O-O-O, e8=Q, exd5). Use the commentary field for a brief move description like 'Sicilian Defense' or 'Developing knight'. Illegal moves return the legal move list.",
+			"Pick a move from the numbered list above. Copy the SAN exactly (e.g. chess_move with move=\"e4\"). ● = safe, ◐ = trade (attacked but defended), ○ = risky (piece may be lost). Captured piece shown in parens. Prefer safe moves; avoid ○ unless strategically sound.",
 			"Respond with ONLY your chess_move call — no text before or after it.",
 			actLine,
 		].join("\n");

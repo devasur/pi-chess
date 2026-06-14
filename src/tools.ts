@@ -33,7 +33,7 @@ export function registerTools(pi: ExtensionAPI): void {
 		name: "chess_move",
 		label: "Chess Move",
 		description:
-			"Make a chess move in SAN (e4, Nf3, Bxb5, O-O, e8=Q). Returns error with legal moves if illegal.",
+			"Make a chess move in SAN. Must be from the legal moves list in the system prompt. Returns error with legal moves if illegal.",
 		promptSnippet: "Make a chess move",
 		promptGuidelines: [
 			"Call chess_move once. Use the commentary field for a brief move description. No separate text.",

@@ -94,6 +94,23 @@ With `terminate: true`, the tool result marks the turn as complete — the move,
 
 If the agent makes an illegal move, `terminate` is not set (the tool throws an error), so the agent gets the error message and can retry with a legal move.
 
+## Annotated Legal Moves
+
+Every agent turn includes a **numbered list of legal moves** with safety annotations:
+
+```
+Legal moves (●safe ◐trade ○risk):
+ 1.● Nbd7   2.● Nc6   3.● Na6   4.● Bd7   5.● Be6   6.● Bf5
+ 7.● Bg4   8.○ Bh3   9.● Qd7   10.● Qd6   11.● Kd7   12.● Bg7
+```
+
+- **● safe** — no opponent piece attacks the destination after the move
+- **◐ trade** — opponent attacks the destination, but we can recapture (potential trade)
+- **○ risk** — opponent attacks the destination and we cannot recapture (piece may be lost for free)
+- Captures show the captured piece type: `exd5(p)` captures a pawn
+
+This eliminates illegal moves (the model copies SAN from the list) and gives the model enough tactical awareness to avoid blunders without requiring deep search. The annotation pass takes ~50ms — negligible vs. the LLM round-trip.
+
 ## Disk Persistence
 
 Games are automatically saved to `~/.pi/agent/extensions/pi-chess/.games/` after every move. Each save is a JSON file containing the FEN, player color, PGN, last move, and timestamp.
@@ -111,6 +128,7 @@ src/types.ts          — BoardState, SaveData, DiskSaveData, BoardDetails, Play
 src/utils.ts          — Coordinate conversion, isLightSquare, centerPad
 src/ascii-board.ts    — board → ASCII for the LLM
 src/state.ts          — boardState, gameActive, chessComponent, persistence helpers
+src/move-annotations.ts — annotate legal moves with threat/safety indicators
 src/persistence.ts    — saveGameToDisk, loadLatestGame, deleteAllSaves
 src/turn.ts           — triggerAgentTurn, emitGameOverMessage, registerContextPruner
 src/messages.ts       — BoardMessageComponent, GameOverMessageComponent, renderers
