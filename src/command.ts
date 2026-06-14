@@ -20,6 +20,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { ChessComponent } from "./chess-component.js";
 import {
+	GAMES_SENTINEL,
 	NEW_GAME_SENTINEL,
 	RESTART_SENTINEL,
 	UNDO_SENTINEL,
@@ -37,7 +38,10 @@ import {
 } from "./state.js";
 import {
 	loadLatestGame,
+	listSavedGames,
+	loadGameByPath,
 } from "./persistence.js";
+import { GameBrowserComponent } from "./game-browser.js";
 import {
 	emitGameOverMessage,
 	triggerAgentTurn,
@@ -48,7 +52,7 @@ import type { PlayerColor } from "./types.js";
 
 export function registerChessCommand(pi: ExtensionAPI): void {
 	pi.registerCommand("chess", {
-		description: "Play chess against the agent (use 'black' to play as Black, 'new' to force a new game)",
+		description: "Play chess against the agent ('black', 'new', 'games' to browse saves)",
 
 		async handler(args, ctx) {
 			if (ctx.mode !== "tui") {
@@ -57,6 +61,20 @@ export function registerChessCommand(pi: ExtensionAPI): void {
 			}
 
 			const raw = args?.trim().toLowerCase() ?? "";
+
+			// Browse saved games
+			if (raw === "games" || raw === "history") {
+				const selected = await openGameBrowser(pi, ctx);
+				if (selected) {
+					const data = await loadGameByPath(selected);
+					if (data) {
+						await resumeSavedGame(pi, ctx, data);
+					} else {
+						ctx.ui.notify("Could not load selected game", "error");
+					}
+				}
+				return;
+			}
 
 			// Explicit new game requested
 			if (raw === "new" || raw === "new white" || raw === "new black") {
@@ -191,6 +209,11 @@ function handleUserMove(
 		return;
 	}
 
+	if (from === GAMES_SENTINEL) {
+		handleGamesBrowser(pi, ctx);
+		return;
+	}
+
 	handleRegularMove(pi, ctx, from, to, promotion);
 }
 
@@ -294,4 +317,85 @@ async function handleRegularMove(
 		// guard anyway in case the chess.js API rejects a move.
 		ctx.ui.notify(`Illegal move: ${msg}`, "error");
 	}
+}
+/** Open the saved-games browser from inside the board (G key). */
+function handleGamesBrowser(
+	pi: ExtensionAPI,
+	ctx: ExtensionCommandContext,
+): void {
+	openGameBrowser(pi, ctx).then((selected) => {
+		if (!selected) return;
+
+		loadGameByPath(selected).then((data) => {
+			if (!data) {
+				ctx.ui.notify("Could not load selected game", "error");
+				return;
+			}
+			resumeSavedGame(pi, ctx, data);
+		});
+	});
+}
+
+/** Open the game browser and return the filepath of the selected game. */
+async function openGameBrowser(
+	_pi: ExtensionAPI,
+	ctx: ExtensionCommandContext,
+): Promise<string | null> {
+	const games = await listSavedGames();
+	if (games.length === 0) {
+		ctx.ui.notify("No saved games found", "info");
+		return null;
+	}
+
+	return ctx.ui.custom<string | null>((tui, _theme, _kb, done) => {
+		const component = new GameBrowserComponent(
+			tui,
+			(selected) => done(selected),
+			games,
+		);
+		return component;
+	});
+}
+
+/** Resume a saved game from disk data (used by /chess games and G key). */
+async function resumeSavedGame(
+	pi: ExtensionAPI,
+	ctx: ExtensionCommandContext,
+	data: import("./types.js").DiskSaveData,
+): Promise<void> {
+	const restored = reconstructFromDiskData(data);
+	setBoardState(restored);
+	setGameActive(!restored.gameOver);
+	activateChessTools(pi);
+	pi.setSessionName(`Chess — ${restored.playerColor === "w" ? "White" : "Black"} (resumed)`);
+
+	if (restored.gameOver) {
+		setGameActive(false);
+		deactivateChessTools(pi);
+	}
+
+	await saveGame(pi);
+
+	await ctx.ui.custom<void>((tui, _theme, _kb, done) => {
+		const component = new ChessComponent(
+			tui,
+			() => {
+				setChessComponent(null);
+				setGameActive(false);
+				deactivateChessTools(pi);
+				done(undefined);
+			},
+			(from: Square, to: Square, promotion?: string) => {
+				handleUserMove(pi, ctx, from, to, promotion);
+			},
+			restored,
+		);
+		setChessComponent(component);
+
+		if (!restored.gameOver && restored.game.turn() !== restored.playerColor) {
+			setTimeout(() => triggerAgentTurn(pi), 100);
+		}
+
+		return component;
+	});
 }

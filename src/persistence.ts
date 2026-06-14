@@ -72,6 +72,110 @@ export async function loadLatestGame(): Promise<DiskSaveData | null> {
 	}
 }
 
+/** Lightweight summary of a saved game — no Chess object needed. */
+export interface GameSummary {
+	/** Filename (e.g. "game-2026-06-14T17-30-22-123Z.json") */
+	filename: string;
+	/** Full disk path */
+	filepath: string;
+	/** ISO timestamp from the save */
+	savedAt: string;
+	/** Player color: "w" or "b" */
+	playerColor: "w" | "b";
+	/** Number of half-moves (ply) from the PGN */
+	moveCount: number;
+	/** Game result: "" if in progress, otherwise "Checkmate! ..." etc. */
+	result: string;
+	/** Last move in SAN (from PGN) */
+	lastMove: string;
+}
+
+/**
+ * List all saved games, newest first, with lightweight metadata.
+ * Reads each file but does NOT create a Chess object — just parses JSON.
+ */
+export async function listSavedGames(): Promise<GameSummary[]> {
+	const dir = getGamesDir();
+
+	let entries: string[];
+	try {
+		entries = await readdir(dir);
+	} catch {
+		return [];
+	}
+
+	const jsonFiles = entries
+		.filter((e) => e.startsWith("game-") && e.endsWith(".json"))
+		.sort(); // oldest → newest
+
+	const summaries: GameSummary[] = [];
+
+	for (const filename of jsonFiles) {
+		const filepath = join(dir, filename);
+		try {
+			const content = await readFile(filepath, "utf-8");
+			const data = JSON.parse(content) as DiskSaveData;
+			if (typeof data.fen !== "string" || typeof data.playerColor !== "string") continue;
+
+			// Extract move count from PGN
+			const pgn = data.pgn ?? "";
+			const moves = pgn
+				.replace(/\[.*?\]\s*/gs, "") // strip headers
+				.trim()
+				.split(/\s+/)
+				.filter((token) => !token.match(/^\d+\./)); // remove move numbers
+			const moveCount = moves.filter((m) => m.length > 0 && m !== "*" && m !== "1-0" && m !== "0-1" && m !== "1/2-1/2").length;
+
+			// Last move
+			const lastMove = moveCount > 0 ? moves[moves.length - 1] : "—";
+
+			// Detect result from FEN or PGN
+			let result = "";
+			if (pgn.includes("1-0")) result = "1-0 White wins";
+			else if (pgn.includes("0-1")) result = "0-1 Black wins";
+			else if (pgn.includes("1/2-1/2")) result = "½-½ Draw";
+			else {
+				// Check FEN for checkmate/stalemate
+				const fenParts = data.fen.split(" ");
+				if (fenParts.length > 0) {
+					// Simple heuristic: if no legal moves indicated by FEN patterns
+					// We can't fully determine without chess.js, so just mark in-progress
+				}
+			}
+
+			summaries.push({
+				filename,
+				filepath,
+				savedAt: data.savedAt,
+				playerColor: data.playerColor as "w" | "b",
+				moveCount,
+				result,
+				lastMove,
+			});
+		} catch {
+			// Skip corrupt files
+		}
+	}
+
+	// Newest first
+	summaries.reverse();
+	return summaries;
+}
+
+/** Load a specific saved game by filename. Returns null on error. */
+export async function loadGameByPath(filepath: string): Promise<DiskSaveData | null> {
+	try {
+		const content = await readFile(filepath, "utf-8");
+		const data = JSON.parse(content) as DiskSaveData;
+		if (typeof data.fen === "string" && typeof data.playerColor === "string") {
+			return data;
+		}
+		return null;
+	} catch {
+		return null;
+	}
+}
+
 /** Delete all saved games from disk (fresh start). */
 export async function deleteAllSaves(): Promise<void> {
 	const dir = getGamesDir();

@@ -23,6 +23,7 @@ Start a game with the `/chess` command:
 - `/chess black` — start a new game (you play **Black**)
 - `/chess new` — start a new game (you play **White**)
 - `/chess new black` — start a new game (you play **Black**)
+- `/chess games` — browse saved games and resume one
 
 Games are automatically saved to disk after every move. When you run `/chess` without arguments, the extension loads the most recent saved game so you can pick up where you left off — even across different pi sessions.
 
@@ -35,6 +36,7 @@ Games are automatically saved to disk after every move. When you run `/chess` wi
 | `Escape` | Deselect piece (or quit if no selection) |
 | `Q` | Quit the game |
 | `R` | Restart with same color (when game is over) |
+| `G` | Browse saved games |
 | `N` | Start a new game (swaps color) |
 | `U` | Undo last move pair |
 
@@ -129,7 +131,8 @@ src/utils.ts          — Coordinate conversion, isLightSquare, centerPad
 src/ascii-board.ts    — board → ASCII for the LLM
 src/state.ts          — boardState, gameActive, chessComponent, persistence helpers
 src/move-annotations.ts — annotate legal moves with threat/safety indicators
-src/persistence.ts    — saveGameToDisk, loadLatestGame, deleteAllSaves
+src/game-browser.ts    — GameBrowserComponent for browsing saved games
+src/persistence.ts    — saveGameToDisk, loadLatestGame, listSavedGames, loadGameByPath, deleteAllSaves
 src/turn.ts           — triggerAgentTurn, emitGameOverMessage, registerContextPruner
 src/messages.ts       — BoardMessageComponent, GameOverMessageComponent, renderers
 src/chess-component.ts — Interactive TUI board (keyboard input, rendering)

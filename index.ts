@@ -22,7 +22,8 @@
  *   src/utils.ts            — coordinate helpers, text padding
  *   src/ascii-board.ts      — board → ASCII for the LLM
  *   src/state.ts            — boardState, gameActive, helpers, save/disk persistence
- *   src/persistence.ts      — saveGameToDisk, loadLatestGame, deleteAllSaves
+ *   src/persistence.ts      — saveGameToDisk, loadLatestGame, listSavedGames, loadGameByPath, deleteAllSaves
+ *   src/game-browser.ts    — GameBrowserComponent for browsing saved games
  *   src/move-annotations.ts  — annotate legal moves with threat/safety indicators
  *   src/turn.ts             — turn-related side effects + context pruning
  *   src/messages.ts         — custom message components & renderer registration
