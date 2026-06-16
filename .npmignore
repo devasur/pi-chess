@@ -1,0 +1,7 @@
+*.jsonl
+chess*.jsonl
+@chess.jsonl
+node_modules/
+package-lock.json
+.git/
+tsconfig.json

@@ -1,13 +1,24 @@
 {
   "name": "pi-chess",
   "version": "1.0.0",
+  "description": "Play chess against the LLM in pi's TUI — full rules, annotated moves, disk persistence, and constant context cost",
+  "keywords": [
+    "pi-package",
+    "chess",
+    "tui",
+    "game"
+  ],
   "type": "module",
-  "private": true,
+  "main": "./index.ts",
   "pi": {
     "extensions": [
       "./index.ts"
     ]
   },
+  "files": [
+    "index.ts",
+    "src/"
+  ],
   "dependencies": {
     "chess.js": "^1.0.0"
   },
@@ -19,5 +30,11 @@
   },
   "devDependencies": {
     "typescript": "^6.0.3"
-  }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/earendil-works/pi-chess.git"
+  },
+  "homepage": "https://github.com/earendil-works/pi-chess#readme"
 }

@@ -5,14 +5,14 @@ A [pi](https://github.com/earendil-works/pi-coding-agent) extension that lets yo
 ## Installation
 
 ```bash
-# Install dependencies
-cd pi-chess && npm install
+# Install from npm
+pi install npm:pi-chess
 
-# Run with pi (quick test)
-pi -e ./index.ts
+# Or install from git
+pi install git:github.com/earendil-works/pi-chess
 
-# Or install as a pi package
-pi install /path/to/pi-chess
+# Or try without installing
+pi -e npm:pi-chess
 ```
 
 ## Usage
