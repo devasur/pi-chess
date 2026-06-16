@@ -61,6 +61,7 @@ export const RESTART_SENTINEL = "__restart__" as unknown as Square;
 export const UNDO_SENTINEL = "__undo__" as unknown as Square;
 export const NEW_GAME_SENTINEL = "__newgame__" as unknown as Square;
 export const GAMES_SENTINEL = "__games__" as unknown as Square;
+export const FLIP_SENTINEL = "__flip__" as unknown as Square;
 
 // Disk persistence directory (relative to agent dir)
 export const GAMES_DIR_NAME = ".games";

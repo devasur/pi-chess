@@ -25,6 +25,8 @@ export interface BoardState {
 	// Game status
 	gameOver: boolean;
 	gameResult: string;
+	// Board orientation: true = Black at bottom (flipped)
+	flipped: boolean;
 }
 
 // Persisted state (FEN + metadata) — written to session entries

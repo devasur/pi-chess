@@ -53,6 +53,7 @@ export function createInitialState(playerColor: PlayerColor = "w"): BoardState {
 		lastMoveTo: null,
 		gameOver: false,
 		gameResult: "",
+		flipped: playerColor === "b",
 	};
 }
 
@@ -177,6 +178,7 @@ export function reconstructFromDiskData(data: DiskSaveData): BoardState {
 		lastMoveTo: data.lastMoveTo as Square | null,
 		gameOver: game.isGameOver(),
 		gameResult: game.isGameOver() ? getGameResult(game) : "",
+		flipped: data.playerColor === "b",
 	};
 }
 

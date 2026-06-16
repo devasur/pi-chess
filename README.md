@@ -39,6 +39,7 @@ Games are automatically saved to disk after every move. When you run `/chess` wi
 | `Q` | Quit the game |
 | `R` | Restart with same color (when game is over) |
 | `G` | Browse saved games |
+| `F` | Flip board orientation |
 | `N` | Start a new game (swaps color) |
 | `U` | Undo last move pair |
 

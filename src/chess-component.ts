@@ -104,6 +104,10 @@ export class ChessComponent implements Component {
 				this.onUserMove(NEW_GAME_SENTINEL, NEW_GAME_SENTINEL);
 			} else if (data === "g" || data === "G") {
 				this.onUserMove(GAMES_SENTINEL, GAMES_SENTINEL);
+			} else if (data === "f" || data === "F") {
+				s.flipped = !s.flipped;
+				this.version++;
+				this.tui.requestRender();
 			}
 			return;
 		}
@@ -117,6 +121,14 @@ export class ChessComponent implements Component {
 		// Browse saved games
 		if (data === "g" || data === "G") {
 			this.onUserMove(GAMES_SENTINEL, GAMES_SENTINEL);
+			return;
+		}
+
+		// Flip board
+		if (data === "f" || data === "F") {
+			s.flipped = !s.flipped;
+			this.version++;
+			this.tui.requestRender();
 			return;
 		}
 
@@ -179,10 +191,18 @@ export class ChessComponent implements Component {
 		}
 	}
 
+	/** Get the board square at the current cursor position (respects flip). */
+	private cursorSquare(): Square {
+		const s = this.state;
+		const row = s.flipped ? 7 - s.cursorRow : s.cursorRow;
+		const col = s.flipped ? 7 - s.cursorCol : s.cursorCol;
+		return squareFromCoords(row, col);
+	}
+
 	/** Handle Enter / Space — selection / move logic. */
 	private handleEnter(): void {
 		const s = this.state;
-		const sq = squareFromCoords(s.cursorRow, s.cursorCol);
+		const sq = this.cursorSquare();
 		const piece = s.game.get(sq);
 
 		if (s.selectedSquare) {
@@ -292,15 +312,15 @@ export class ChessComponent implements Component {
 		const game = s.game;
 		let controls: string;
 		if (s.gameOver) {
-			controls = `${BOLD}R${RESET} restart  ${DIM}|${RESET}  ${BOLD}N${RESET} new  ${DIM}|${RESET}  ${BOLD}G${RESET} games  ${DIM}|${RESET}  ${BOLD}Q${RESET}/${BOLD}ESC${RESET} quit`;
+			controls = `${BOLD}R${RESET} restart  ${DIM}|${RESET}  ${BOLD}N${RESET} new  ${DIM}|${RESET}  ${BOLD}F${RESET} flip  ${DIM}|${RESET}  ${BOLD}G${RESET} games  ${DIM}|${RESET}  ${BOLD}Q${RESET}/${BOLD}ESC${RESET} quit`;
 		} else if (s.promotionFrom) {
 			controls = `${BOLD}↑↓${RESET} choose  ${DIM}|${RESET}  ${BOLD}ENTER${RESET} confirm  ${DIM}|${RESET}  ${BOLD}ESC${RESET} cancel`;
 		} else if (game.turn() !== s.playerColor) {
-			controls = `${BOLD}N${RESET} new  ${DIM}|${RESET}  ${BOLD}G${RESET} games  ${DIM}|${RESET}  ${DIM}Waiting for agent's move...${RESET}`;
+			controls = `${BOLD}N${RESET} new  ${DIM}|${RESET}  ${BOLD}F${RESET} flip  ${DIM}|${RESET}  ${BOLD}G${RESET} games  ${DIM}|${RESET}  ${DIM}Waiting for agent's move...${RESET}`;
 		} else if (s.selectedSquare) {
-			controls = `${BOLD}↑↓←→${RESET} move  ${DIM}|${RESET}  ${BOLD}ENTER${RESET} confirm  ${DIM}|${RESET}  ${BOLD}N${RESET} new  ${DIM}|${RESET}  ${BOLD}G${RESET} games  ${DIM}|${RESET}  ${BOLD}ESC${RESET} deselect  ${DIM}|${RESET}  ${BOLD}U${RESET} undo`;
+			controls = `${BOLD}↑↓←→${RESET} move  ${DIM}|${RESET}  ${BOLD}ENTER${RESET} confirm  ${DIM}|${RESET}  ${BOLD}F${RESET} flip  ${DIM}|${RESET}  ${BOLD}N${RESET} new  ${DIM}|${RESET}  ${BOLD}G${RESET} games  ${DIM}|${RESET}  ${BOLD}ESC${RESET} deselect  ${DIM}|${RESET}  ${BOLD}U${RESET} undo`;
 		} else {
-			controls = `${BOLD}↑↓←→${RESET} move  ${DIM}|${RESET}  ${BOLD}ENTER${RESET} select  ${DIM}|${RESET}  ${BOLD}N${RESET} new  ${DIM}|${RESET}  ${BOLD}G${RESET} games  ${DIM}|${RESET}  ${BOLD}Q${RESET}/${BOLD}ESC${RESET} quit  ${DIM}|${RESET}  ${BOLD}U${RESET} undo`;
+			controls = `${BOLD}↑↓←→${RESET} move  ${DIM}|${RESET}  ${BOLD}ENTER${RESET} select  ${DIM}|${RESET}  ${BOLD}F${RESET} flip  ${DIM}|${RESET}  ${BOLD}N${RESET} new  ${DIM}|${RESET}  ${BOLD}G${RESET} games  ${DIM}|${RESET}  ${BOLD}Q${RESET}/${BOLD}ESC${RESET} quit  ${DIM}|${RESET}  ${BOLD}U${RESET} undo`;
 		}
 		return centerPad(controls, width);
 	}
@@ -341,8 +361,14 @@ export class ChessComponent implements Component {
 			return " ".repeat(left) + str + " ".repeat(totalPad - left);
 		};
 
-		const buildRow = (row: number, lineInCell: number): string => {
-			const rank = RANKS[row];
+		// When flipped, display row 0 = board row 7 (rank 1),
+		// display col 0 = board col 7 (file h).
+		const boardRow = (displayRow: number) => s.flipped ? 7 - displayRow : displayRow;
+		const boardCol = (displayCol: number) => s.flipped ? 7 - displayCol : displayCol;
+
+		const buildRow = (displayRow: number, lineInCell: number): string => {
+			const br = boardRow(displayRow);
+			const rank = RANKS[br];
 			const midLine = Math.floor(CELL_H / 2);
 
 			let line = "";
@@ -353,11 +379,12 @@ export class ChessComponent implements Component {
 				line += "   ";
 			}
 
-			for (let col = 0; col < 8; col++) {
-				const sq = squareFromCoords(row, col);
-				const piece = board[row][col];
-				const isLight = (row + col) % 2 === 0;
-				const isCursor = row === s.cursorRow && col === s.cursorCol;
+			for (let displayCol = 0; displayCol < 8; displayCol++) {
+				const bc = boardCol(displayCol);
+				const sq = squareFromCoords(br, bc);
+				const piece = board[br][bc];
+				const isLight = (br + bc) % 2 === 0;
+				const isCursor = displayRow === s.cursorRow && displayCol === s.cursorCol;
 				const isSelected = sq === s.selectedSquare;
 				const isTarget = legalTargets.has(sq);
 				const isCapture = legalCaptures.has(sq);
@@ -404,12 +431,14 @@ export class ChessComponent implements Component {
 			return line;
 		};
 
-		const fileRow = "   " + FILES.map((f) => centerStr(f, CELL_W)).join("") + "  ";
+		// File labels follow display order (flipped = h..a, normal = a..h)
+		const displayFiles = s.flipped ? [...FILES].reverse() : FILES;
+		const fileRow = "   " + displayFiles.map((f) => centerStr(f, CELL_W)).join("") + "  ";
 		lines.push(centerPad(DIM + fileRow + RESET, width));
 
-		for (let row = 0; row < 8; row++) {
+		for (let displayRow = 0; displayRow < 8; displayRow++) {
 			for (let lineInCell = 0; lineInCell < CELL_H; lineInCell++) {
-				lines.push(centerPad(buildRow(row, lineInCell), width));
+				lines.push(centerPad(buildRow(displayRow, lineInCell), width));
 			}
 		}
 
