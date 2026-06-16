@@ -2,6 +2,8 @@
 
 A [pi](https://github.com/earendil-works/pi-coding-agent) extension that lets you play chess against the current LLM model directly in the TUI.
 
+![pi-chess board](screenshot.png)
+
 ## Installation
 
 ```bash

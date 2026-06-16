@@ -13,11 +13,13 @@
   "pi": {
     "extensions": [
       "./index.ts"
-    ]
+    ],
+    "image": "./screenshot.png"
   },
   "files": [
     "index.ts",
-    "src/"
+    "src/",
+    "screenshot.png"
   ],
   "dependencies": {
     "chess.js": "^1.0.0"
