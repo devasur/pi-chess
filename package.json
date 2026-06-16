@@ -36,7 +36,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/earendil-works/pi-chess.git"
+    "url": "git+https://github.com/devasur/pi-chess.git"
   },
-  "homepage": "https://github.com/earendil-works/pi-chess#readme"
+  "homepage": "https://github.com/devasur/pi-chess#readme"
 }
